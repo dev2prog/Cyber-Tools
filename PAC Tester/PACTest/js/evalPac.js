@@ -1,0 +1,345 @@
+/*
+ * Main Functions
+ */
+var outCodeMirror;
+var PRstring;
+
+function evalPac(SkipLogVal) {
+    // clear output
+    FindProxyForURL = undefined;
+    let result = undefined;
+    let err = false;
+    let proxyStr = '';
+	SkipLog = SkipLogVal;
+	PRstring = undefined;
+	PACLineArray = []; //ADDED C2
+
+    document.getElementById("pac_file").innerHTML = '';
+    document.getElementById("result").innerHTML = '&nbsp;';
+    document.getElementById("result").classList.remove('err');
+    // if output CodeMirror is already defined, then blank it otherwise create it...
+    if (outCodeMirror) {
+        outCodeMirror.setValue('');
+    } else {
+        if (SkipLog == 0) {
+			document.getElementById("output").classList.add('script'); 
+			outCodeMirror = CodeMirror(document.getElementById("output"), {
+				lineNumbers: true,
+				readOnly: 'nocursor',
+				mode: "javascript"
+			});
+		}
+    }
+    // normally the script will be in the codeMirror, but if it's disabled for some reason get it from the textarea.
+    let pac_script;
+    if (myCodeMirror) {
+        pac_script = myCodeMirror.getValue();
+    } else {
+        pac_script = document.getElementById("pac_script").value;
+	}
+
+    // check script for errors
+    JSHINT(pac_script);
+	for (let i = 0; i < JSHINT.errors.length; ++i) {
+		lintErr = JSHINT.errors[i];
+		if (!lintErr) {
+		//console.log(lintErr);
+		} else {
+		appendLine('Error, line: ' + lintErr.line + ', ' + lintErr.reason, true);
+		}
+	}
+    // load script
+	PACLineArray = pac_script.split('\n');
+    let html_script = document.createElement('script');
+    html_script.innerHTML = pac_script;
+    //console.log(pac_script);
+    try {
+        document.getElementById('pac_file').appendChild(html_script);
+    }
+    catch(e) {
+        proxyStr = result = 'Error: ' + e.message;
+        err = true;
+    }
+    if (typeof FindProxyForURL != 'function') {
+        proxyStr = result = "Error: FindProxyForURL is not defined or errors in it mean it can't be imported.";
+        err = true;
+    }
+    if (!err) {
+        // define host variable
+        let {host, url} = normalizeHostUrl(document.getElementById("url").value);
+        if (host == null) {
+            result = 'URLError: "' + url + '". URL must contain protocol prefix, e.g. https://';
+            proxyStr = result;
+            err = true;
+        } else {
+            // execute FindProxyForURL
+            appendLine('FindProxyForURL("' + url + '", "' + host + '")');
+            try {
+                proxyStr = FindProxyForURL(url, host);
+                result = 'FindProxyForURL("' + url + '", "' + host + '") => "' + proxyStr + '";';
+            }
+            catch(e) {
+                result = 'Error: ' + e.message;
+                proxyStr = result;
+                err = true;
+            }
+        }
+    }
+    if (result == undefined) {
+        err = true;
+	}
+    if (result != '') {
+        appendLine(result, err);
+		updateResult(proxyStr, err);
+		FindProxyForURL = undefined;
+	}
+	// ** Google Table **//
+	if (SkipLog == 0) {
+		let jdata = new google.visualization.DataTable();
+		jdata.addColumn('string', 'Entry');
+		jdata.addColumn('string', 'TestResult');
+		
+		let splitjdata = PRstring.split('\n');
+		sji=0;
+		while (sji < splitjdata.length) {
+			if (splitjdata[sji].indexOf(';') > -1) {
+				RowStr = splitjdata[sji].substring(0,splitjdata[sji].length-1);
+			} else {
+				RowStr = splitjdata[sji];
+			}
+			
+			if (RowStr.indexOf('=>') > -1) {
+				SplitRowStr = RowStr.split(' => ');
+				jdata.addRow([SplitRowStr[0], SplitRowStr[1]]);
+			} else {
+				jdata.addRow([RowStr, '']);
+			}
+			sji++;
+		}
+
+
+		let PRtable = new google.visualization.Table(document.getElementById('table_div'));
+		PRtable.draw(jdata, {showRowNumber: true, width: '98%', height: '100%'});
+		//document.getElementById("c2CodeTest").value = PRstring;
+		// ** END Google Table ** //
+	}	
+    return false;
+}
+
+function normalizeHostUrl(url) {
+    // Browsers always have a lower case host name
+    let host = null;
+    let _URL_REGEX = new RegExp('(^[^:]*:\/\/)([^\/:]+)(.*)')
+    let match = _URL_REGEX.exec(url);
+    if (match != null && match.length == 4) {
+        host = match[2].toLowerCase();
+        url = match[1] + host + match[3];
+    }
+    return {host, url};
+}
+
+function updateResult(text, err) {
+    document.getElementById("result").innerHTML = text;
+    if (err) {
+        document.getElementById("result").classList.add("err");
+    }
+}
+
+function appendLine(line, err) {
+	if (SkipLog == 0) {
+		//console.trace();
+		let lineCount = outCodeMirror.lineCount();
+		let pos = { // create a new object to avoid mutation of the original selection
+			line: lineCount,
+			ch: lineCount.length - 1 // set the character position to the end of the line
+		}
+		/* console.log(line); */ //REMOVE REM
+		if (err) line = '// ' + line
+		outCodeMirror.replaceRange(line+'\n', pos);
+
+
+		if (PRstring == undefined) {
+			PRstring = line;
+		} else {
+			PRstring = PRstring + '\n' + line;
+		}
+	}
+}
+
+function comparison(left, right, comparator) {
+    let retVal;
+    switch(comparator) {
+        case "==":
+            retVal = left == right;
+            break;
+        case ">":
+            retVal = left > right;
+            break;
+        case "<":
+            retVal = left < right;
+            break;
+        case "!=":
+            retVal = left != right;
+            break;
+      }
+      appendLine('"' + left + '" ' + comparator + ' "' + right + '" => ' + retVal);
+      return retVal;
+}
+
+function replaceComparators(pac_script) {
+    let matches = [];
+    pac_script = removeComments(pac_script);
+    let temp_pac_script = pac_script;
+    // remove end chars from strings
+    let regexFindStr = /"(\\"|[^"])*"/g;
+    while (null != (match = regexFindStr.exec(pac_script))) {
+        //console.log(match);
+        strippedMatch = match[0].replace(/[\|&;{}]/g, ' ');
+        if (match[0] != strippedMatch) {
+            //console.log(strippedMatch);
+            temp_pac_script = temp_pac_script.splice(match.index, strippedMatch.length, strippedMatch);
+        }
+    }
+
+    // chunks with comparators in them
+    let REGEX = /(?<left>[^\|&;{}]*)(?<comparator>==|!=|<|>)(?<right>[^\|&;{}]*)/g;
+    while (null != (match = REGEX.exec(temp_pac_script))) {
+        //console.log(match);
+        matches.push(match);
+    }
+
+    // search the array in reverse order so that we modify the string from end to start
+    // modifying in this order means we don't need to handle changes in string length
+    for (let i = matches.length - 1; i >= 0; i--) {
+        newComparator = parseMatch(matches[i].index, matches[i][0].length, pac_script);
+        //console.log(newComparator);
+        pac_script = pac_script.splice(newComparator.replaceStart, newComparator.replaceLen, newComparator.text);
+    }
+    return pac_script;
+}
+
+function parseMatch(index, length, pac_script) {
+    // because we removed some characters, we are taking the orginal pac_script and parsing them
+    let compareStr = pac_script.substr(index, length)
+    // console.log(compareStr);
+    let REGEX = /(?<left>[\s\S]*)(?<comparator>==|!=|<|>)(?<right>[\s\S]*)/;
+    let match = REGEX.exec(compareStr)
+
+    let left = match.groups.left;
+    let numBracket = 0;
+    let start = 0;
+    for (let i = left.length; i > 0; i--) {
+        if (left[i] == ")") numBracket++;
+        if (left[i] == "(") numBracket--;
+        if (numBracket < 0) {
+            start = i + 1;
+            break;
+        }
+    }
+    //console.log("start: '" + start + "', left: '" + left.substring(start) + "'");
+    left = left.substring(start).trim();
+
+    let right = match.groups.right;
+    numBracket = 0;
+    let end = right.length;
+    for (let i = 0; i < right.length; i++) {
+        if (right[i] == "(") numBracket++;
+        if (right[i] == ")") numBracket--;
+        if (numBracket < 0) {
+            end = i;
+            break;
+        }
+    }
+    //console.log("end: '" + end + "', right: '" + right.substring(0, end) + "'");
+    right = right.substring(0, end).trim();
+    let comparator = match.groups.comparator.trim();
+    let replaceStart = index + start;
+    let replaceLen = match.groups.left.length - start + match.groups.comparator.length + end;
+    leftSpace = (/^\s*/.exec(match.groups.left))[0];
+    rightSpace = (/\s*$/.exec(match.groups.right))[0];
+    let newComparator = leftSpace + "comparison(" + left + ", " + right + ", '" + comparator + "')" + rightSpace;
+    return {"replaceStart": replaceStart, "replaceLen": replaceLen, "text": newComparator};
+}
+
+String.prototype.splice = function(start, length, replacement) {
+    return this.substr(0, start) + replacement + this.substr(start + length);
+}
+
+function removeComments(pac_script) {
+    return pac_script.replace(/\/\*[\s\S]*\*\/|\s*\/\/.*$/gm, '');
+}
+
+/*
+ * Override Proxy PAC function to provide logging
+ */
+function myIpAddress(){
+    let ret = document.getElementById("src_ip").value;
+    appendLine('myIpAddress() => "' + ret + '";');
+    return ret;
+}
+
+function dnsResolve(host) {
+    if (host == null) {
+        return null;
+	}
+    //console.log('dnsResolve("' + host + '")');
+    // if we have an specificed IP, skip the next bit and return it.
+    let ip = (document.getElementById("dst_ip").value).trim();
+    if (ip == '') {
+        ip = null;
+        let json;
+        let oReq = new XMLHttpRequest();
+        oReq.onload = function () {
+            json = JSON.parse(this.responseText);
+            //console.log(json);
+        }
+        //oReq.open("get", 'https://8.8.8.8/resolve?name=' + host, false);
+        oReq.open("get", '/resolve?name=' + host, false);
+        try {
+            oReq.send();
+        }
+        catch(e) {
+            appendLine('Error: DNS lookup failed: ' + e.message, true);
+        }
+        if (json && json.Answer)
+            ip = json.Answer[json.Answer.length-1].data;
+    }
+    appendLine('dnsResolve("' + host + '") => "' + ip + '";');
+    return ip;
+}
+
+var dnsDomainIs = functionLogging(dnsDomainIs);
+var dnsDomainLevels = functionLogging(dnsDomainLevels);
+var isInNet = functionLogging(isInNet);
+var isPlainHostName = functionLogging(isPlainHostName);
+var isResolvable = functionLogging(isResolvable);
+var localHostOrDomainIs = functionLogging(localHostOrDomainIs);
+var shExpMatch = functionLogging(shExpMatch);
+var weekdayRange = functionLogging(weekdayRange);
+var dateRange = functionLogging(dateRange);
+var timeRange = functionLogging(timeRange);
+
+var alert = function(str) {
+    appendLine('alert("' + str +'");');
+}
+
+ function functionLogging(orginalFunction) {
+    newFunction = function(...args) {
+        let logStr = orginalFunction.name + '('
+		//console.log("logStr: " + logStr);
+        for(let i = 0; i < args.length ;i++) {
+            // if not the last item
+            if (i < args.length-1) {
+                logStr = logStr + '"' + args[i] + '", ';
+            } else {
+                logStr = logStr + '"' + args[i] + '")';
+			}
+			//console.log("args i: " + i + " args: " + args[i]);
+        };
+        //console.log(logStr); // ADD REM
+        let ret = orginalFunction(...args);
+        appendLine(logStr + ' => ' + ret + ';');
+        return ret;
+    };
+    return newFunction;
+}

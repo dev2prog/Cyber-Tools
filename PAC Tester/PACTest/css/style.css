@@ -1,0 +1,190 @@
+body{
+    margin: 0px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Montserrat', sans-serif;
+    color: #555;
+    padding-left: 20px;
+    padding-right: 10px;
+}
+h1{
+    font-size: 1.5em;
+}
+h2{
+    font-size: 1em;
+}
+H3{
+    font-size: 1em;
+}
+.Cell-font1 {
+	font-style: bold;
+	color: darkblue;
+	font-size: 22px;
+}
+
+div.main{
+    height: auto;
+}
+div.script{
+    width: 97.5%;
+    border-width: 1px;
+    border-style: solid;
+}
+div.function{
+    width: 100%;
+}
+div.functionH{
+    border-width: 1px;
+    border-style: solid;
+    padding: 10px;
+    background-color: ghostwhite;
+    font-weight: bold;
+}
+div.functionB{
+    border-width: 1px;
+    border-style: solid;
+    padding: 10px;
+    padding-top:0px;
+}
+pre{
+    overflow: auto;
+}
+input.wide{
+    width: 19.5%;
+    box-sizing: border-box;
+}
+div.p{
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+div.bold{
+    margin-top: 12px;
+    margin-bottom: 12px;
+    font-weight: bold;
+}
+div.col{
+    margin-top: auto;
+    flex: 1;
+}
+div.help{
+    margin-bottom: auto;
+    margin-right: 20px;
+    text-align: right;
+    flex-grow: 2;
+}
+div.column1{
+	float: left;
+	width: 50%;
+	margin: 10px;
+}
+div.column2{
+	float: left;
+	width: 45%;
+	margin: 10px;
+}
+.flex{
+    display: flex;
+}
+@media screen and (max-width: 600px) {
+    .flex {
+        display: block;
+    }
+}
+div.bottom{
+    position: relative;
+    height: auto;
+    bottom: 0;
+    flex: 1;
+    display: flex;
+}
+div.float_bottom{
+    margin-top: auto;
+}
+div.result{
+    padding: 10px;
+    background-color: aliceblue;
+}
+div.err{
+    background-color: lightpink;
+}
+div.pre{
+    white-space: pre;
+    overflow: auto;
+
+}
+div.warn{
+    padding: 10px;
+    background-color: bisque;
+    margin: 6px;
+}
+div.gtable{
+	padding: 10px
+}
+button{
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+textarea{
+    width: 75%;
+    box-sizing: border-box;
+    height: 15em;
+    display: block;
+}
+
+.bold-green-font {
+font-weight: bold;
+color: green;
+}
+
+.bold-red-font {
+font-weight: bold;
+color: red;
+}
+
+.bold-font {
+font-weight: bold;
+}
+
+.right-text {
+text-align: right;
+}
+
+.large-font {
+font-size: 15px;
+}
+
+.italic-darkblue-font {
+font-style: italic;
+color: darkblue;
+}
+
+.italic-purple-font {
+font-style: italic;
+color: purple;
+}
+
+.underline-blue-font {
+text-decoration: underline;
+color: blue;
+}
+
+.gold-border {
+border: 3px solid gold;
+}
+
+.deeppink-border {
+border: 3px solid deeppink;
+}
+
+.orange-background {
+background-color: orange;
+}
+
+.orchid-background {
+background-color: orchid;
+}
+
+.beige-background {
+background-color: beige;
+}

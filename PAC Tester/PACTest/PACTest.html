@@ -1,0 +1,377 @@
+<!doctype html>
+<head>
+	<title>PAC Tester - WPAD / Proxy Auto-Config (PAC) File Tester</title>
+	<meta name="title" content="PAC Tester - Proxy PAC / WPAD File Tester">
+	<meta name="description" content="PAC Tester enables you to validate Proxy Auto-Config (PAC) and Web Proxy Auto-Discovery (WPAD) scripts. Outputting the resulting proxy and providing debugging.">
+	<meta name="keywords" content="PAC Tester, Proxy PAC, Proxy auto-config, Web Proxy Auto-Discovery, WPAD, PAC Parser, PAC Validator">
+	<meta name="robots" content="index, follow">
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta http-equiv='content-language' content='en'>
+	<meta name="language" content="English">
+	<link rel="stylesheet" href="css/style.css">
+	<link rel="shortcut icon" href="css/favicon.ico">
+	<link rel="stylesheet" href="css/codemirror.min.css" />
+	<link rel="stylesheet" href="css/lint.min.css" />
+	<script src="js/codemirror.min.js"></script>
+	<script src="js/javascript.min.js"></script>
+	<script src="js/lint.min.js"></script>
+	<script src="js/javascript-lint.min.js"></script>
+	<script src="js/jshint.min.js"></script>
+	<script type="text/javascript" src="js/loader.js"></script>
+	<script type="text/javascript" src="js/jquery-1.10.2.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<html>
+	<body>
+
+
+	<div id="main" class="main">
+		<H1>Proxy PAC or WPAD File Tester</H1>
+		<div style="display: flex;">
+			<div class="col">
+				<H2>PAC File</H2>
+			</div>
+        </div>
+
+		<!-- <input type="file" accept=".pac,application/text" onclick="this.value=null" onchange="openPAC(this)" class="invisible" id="PACfileinput"></input>
+		<button class="button" type="button" onclick="SplitTest(); return false;">Split Test</button> -->
+
+		<div class="flex">
+			<div class="column1">
+				<input type="file" accept=".pac,application/text" onclick="this.value=null" onchange="openPAC(this)" class="invisible" id="PACfileinput"></input>
+				<!-- <button class="button" type="button" onclick="SplitTest(); return false;">Split Test</button> -->
+			
+				<div class="script">
+					<textarea id="pac_script" name="pac_script"></textarea>
+				</div>
+				<br>
+				<tr>
+					<td>
+						<label for="url"><b>URL</b>
+						<input class="wide" id="url" name="url" type="text" value="https://www.google.com"></input></label>
+					</td>
+					<td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
+					<td>
+						<label for="src_ip"><b>Source IP Address</b>
+						<input class="wide" id="src_ip" name="src_ip" type="text" value="10.10.10.10"></input></label>
+					</td>
+					<td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
+					<td>
+						<label for="dst_ip"><b>Override dnsResolve (Optional)</b>
+						<input class="wide" id="dst_ip" name="dst_ip" type="text" value=""></input></label>
+					</td>
+				</tr>
+			</div>
+			<div class="column2">
+				<button class="button" type="button" onclick="FullProxyTest(); return false;">Full Proxy Test</button>
+				<!-- <input type="text" id="PACAutoTestStatus" name="PACAutoTestStatus"> -->
+				<br><br>
+				<div id="PACAutoTestTable_div"></div>
+			</div>
+		</div>
+		<div class="p">
+			<button class="button" type="button" onclick="evalPac(0); return false;">Troubleshoot Proxy PAC</button>
+			
+		</div>
+		<div id="result" class="p pre result">&nbsp;</div>
+		<br>
+		<H2>PAC Test Results:</H2>
+		<div class="gtable" id="table_div"></div>
+	</div>
+	<br>
+	<H2>DEBUG LOG:</H2>
+	<div id="output"></div>
+	<br>
+
+	<script src="js/ascii_pac_utils.js"></script>
+	<script src="js/evalPac.js"></script>
+	<script>
+		// Helpful Link: https://developers.google.com/chart/interactive/docs/reference
+		// Helpful Link: https://developers.google.com/chart/interactive/docs/examples
+		// Helpful Link: https://developers.google.com/chart/interactive/docs/reference#DataTable_setProperty
+		// Helpful Link: https://developers.google.com/chart/interactive/docs/reference?csw=1#DataTable_setCell
+		// Helpful Link: https://developers.google.com/chart/interactive/docs/gallery/table#customproperties
+		
+		google.charts.load('current', {'packages':['table']});
+		//google.charts.setOnLoadCallback(drawPACAutoTestTable);
+		let PACTestData;
+		SkipLine = 1;
+		
+		var myCodeMirror = CodeMirror.fromTextArea(document.getElementById("pac_script"), {
+			lineNumbers: true,
+			tabindex: 0,
+			indentUnit: 4,
+			spellcheck: false,
+			autocorrect: false,
+			autocapitalize: false,
+			gutters: ["CodeMirror-lint-markers"],
+			lint: {options: {esversion: 2021}},
+			mode: "javascript"
+		});
+		window.JSHINT = JSHINT;
+		
+		let oReq = new XMLHttpRequest();
+		oReq.onload = function () {
+			let ipv4_regex = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/gm;   
+			if (ipv4_regex.test(this.responseText))
+				document.getElementById("src_ip").value = this.responseText;
+		}
+
+
+		function openPAC (input) {
+			loaded = {};
+			if (!input.files || !input.files.length) {
+				alert('No file selected.');
+			} else {
+
+				let file = document.getElementById("PACfileinput").files[0];
+				let reader = new FileReader();
+				
+				reader.onload = (e) => loadPACText(e.target.result);
+				reader.readAsText(file);
+			}
+		}
+
+		function loadPACText (text) {
+			myCodeMirror.setValue(text);
+			//document.getElementById("c2codetxt").value = text;
+			PACTestData = new google.visualization.DataTable();
+			PACTestData.addColumn('number', 'line');
+			PACTestData.addColumn('string', 'Test');
+			PACTestData.addColumn('string', '+-');
+			PACTestData.addColumn('number', 'routeno');
+			PACTestData.addColumn('string', 'route');
+			PACTestData.addColumn('string', 'result');
+
+			PACRouteInt = 0; //PAC Route Integer / Number
+			PACRouteSign = "+"; // PAC Route Sign - "+" = route should equal, "-" = NOT (!) rule and should not equal
+			PTLInt = 0; //PAC Text Line Integer / Number
+			let TestStr = ""; // Test String passed to table
+			let ProxyDirect = []; //Proxy / Direct Array
+			PDInt = 0; //Proxy / Direct Integer
+			PACLineTxt = text.split('\n'); // This splits file into individual lines / Array of lines
+			PTA = ""; // Test code *** can be removed
+			SkipLine = 0; // Indicator to determine if line of PAC file should not be read (skipped) triggered when "//" is found at begining of line
+			SkipMultiLine = 0;
+			
+			while (PTLInt < PACLineTxt.length) {
+				parseddatarow = [];
+				PACLineStr = PACLineTxt[PTLInt].trim(); //PACLineStr = PACLineTxt but Leading and Ending spaces removed
+				
+				
+				if (PACLineStr.length > 0) {
+					if (PACLineStr == "{") {SkipLine = 1;}
+					if (PACLineStr == "}") {SkipLine = 1;}
+					if (PACLineStr.substring(0,2) == "//") {SkipLine = 1;}
+					if (PACLineStr.substring(0,2) == "/*") {SkipMultiLine = 1;}
+					
+					if (SkipLine == 0 && SkipMultiLine == 0) {
+						let Split1PTLCount = 0;
+						TestStr = "";
+						if (PACLineStr.includes("||") || PACLineStr.includes("&&")) {
+							if (PACLineStr.includes("||")) {
+								Split1TrimPTL = PACLineStr.split('||');
+							} else {
+								Split1TrimPTL = PACLineStr.split('&&');
+							}
+							while (Split1PTLCount < Split1TrimPTL.length) {
+								if (Split1TrimPTL[Split1PTLCount].toUpperCase().includes("DNSDOMAINIS") || Split1TrimPTL[Split1PTLCount].toUpperCase().includes("SHEXPMATCH") || Split1TrimPTL[Split1PTLCount].toUpperCase().includes("MYIPADDRESS")) {
+									Split2TrimPTL = Split1TrimPTL[Split1PTLCount].split('"');
+
+									if (Split1TrimPTL[Split1PTLCount].includes("myIpAddress")) {
+										TestStr = document.getElementById("src_ip").value;
+									} else {
+										TestStr = GetTestStr(Split2TrimPTL[1]); // call function to determin value for TestStr
+										
+										if (TestStr.toUpperCase().substring(0,4) == "HTTP") {
+											// do nothing;
+										} else {
+											TestStr = "HTTPS://" + TestStr;
+										}
+									}
+									
+									if (Split1TrimPTL[Split1PTLCount].includes("!")) {
+										PACRouteSign = "-";
+									} else {
+										PACRouteSign = "+";
+									}
+
+									parseddatarow.push(PTLInt); // PAC Text Line Integer / Number
+									parseddatarow.push(TestStr); // PAC Text Line
+									parseddatarow.push(PACRouteSign); // Direct or Proxy Number
+									parseddatarow.push(PACRouteInt); // Route number used to determine route name
+									parseddatarow.push(''); // route name
+									parseddatarow.push(''); // test result
+									PACTestData.addRow(parseddatarow);
+								}
+								Split1PTLCount++;
+							}
+						} else if (PACLineStr.toUpperCase().includes("DNSDOMAINIS") || PACLineStr.toUpperCase().includes("SHEXPMATCH") || PACLineStr.toUpperCase().includes("MYIPADDRESS")) {
+							Split2TrimPTL = PACLineStr.split('"');
+
+							if (PACLineStr.includes("myIpAddress")) {
+								TestStr = document.getElementById("src_ip").value;
+							} else {
+								TestStr = GetTestStr(Split2TrimPTL[1]); // call function to determin value for TestStr
+								
+								if (TestStr.toUpperCase().substring(0,4) == "HTTP") {
+									// do nothing;
+								} else {
+									TestStr = "HTTPS://" + TestStr;
+								}
+							}
+
+							if (PACLineStr.includes("!")) {
+								PACRouteSign = "-";
+							} else {
+								PACRouteSign = "+";
+							}
+
+							parseddatarow.push(PTLInt); // PAC Text Line Integer / Number
+							parseddatarow.push(TestStr); // PAC Text Line
+							parseddatarow.push(PACRouteSign); // Direct or Proxy Number
+							parseddatarow.push(PACRouteInt); // Route number used to determine route name
+							parseddatarow.push(''); // route name
+							parseddatarow.push(''); // test result
+							PACTestData.addRow(parseddatarow);
+						}
+						
+						if (PACLineStr.toUpperCase().includes("RETURN")) {
+							if (PACLineStr.toUpperCase().includes("DIRECT")) {
+								ProxyDirect.push('DIRECT');
+							} else {
+								ProxyDirect.push('PROXY');
+							}
+							PACRouteInt++;
+						}
+					}
+
+					if (PACLineStr.includes("*/")) {SkipMultiLine = 0;}
+				}
+				SkipLine = 0;
+				
+				PTA = PTA + '\n' + PTLInt + " ~ " + PACLineTxt[PTLInt];
+				PTLInt++;
+			}
+			
+			
+			while (PDInt < PACTestData.getNumberOfRows()) {
+				
+				RouteVal = PACTestData.getValue(PDInt, 3);
+				TempVal = ProxyDirect[RouteVal];
+
+				//PACTestData.setValue(PDInt, 4, ProxyDirect[RouteVal]); // setValue(ROW, Column, Value)
+				if (PACTestData.getValue(PDInt, 2) == '-') {
+					if (TempVal == 'DIRECT') {
+						TempVal = 'PROXY';
+					} else {
+						TempVal = 'DIRECT';
+					}
+				}
+				PACTestData.setValue(PDInt, 4, TempVal);
+				PDInt++;
+			}
+			
+			let PACTestView = new google.visualization.DataView(PACTestData);
+			PACTestView.hideColumns([3]);
+
+			let PACAutoTestTable2 = new google.visualization.Table(document.getElementById('PACAutoTestTable_div'));
+			PACAutoTestTable2.draw(PACTestView, {allowHtml: true, showRowNumber: true, width: '98%', height: '250px'});
+		}
+		
+		function GetTestStr (TestStr) {
+			if (TestStr.includes("*")) {
+				if (TestStr.substring(0,3) == "*.*") {
+					TestStr = "HTTPS://RYAN.RYAN" + TestStr.substring(3,TestStr.length);
+				} else if (TestStr.substring(0,2) == "*.") {
+					TestStr = "HTTPS://RYAN." + TestStr.substring(2,TestStr.length);
+				} else if (TestStr.substring(0,1) == "*") {
+					TestStr = "HTTPS://RYAN~" + TestStr.substring(1,TestStr.length);
+				}
+				
+				if (TestStr.includes("*")) {
+					Split3TrimPTL = TestStr.split('*');
+					S3PTL=1;
+					TestStr = Split3TrimPTL[0] + "RYAN";
+					while (S3PTL < Split3TrimPTL.length) {
+						TestStr = TestStr + Split3TrimPTL[S3PTL] + "RYAN";
+						S3PTL++;
+					}
+					TestStr = TestStr.substring(0,TestStr.length - 4);
+				}
+			}
+			return TestStr;
+		}
+		
+		function FullProxyTest () {
+			let cssClassNames = {
+				'headerRow': '',
+				'tableRow': '',
+				'oddTableRow': '',
+				'selectedTableRow': '',
+				'hoverTableRow': '',
+				'headerCell': '',
+				'tableCell': '',
+				'rowNumberCell': ''};
+			let PACAutoTestTableOptions = {
+				'showRowNumber': true,
+				'allowHtml': true,
+				'cssClassNames': cssClassNames,
+				width: '98%',
+				height: '250px'};
+
+			FPTInt = 0;
+			if (document.getElementById("src_ip").length < 4) {
+				document.getElementById("src_ip").value = '10.10.10.10';
+			}
+			while (FPTInt < PACTestData.getNumberOfRows()) {
+				document.getElementById("url").value = PACTestData.getValue(FPTInt, 1);
+				
+				evalPac(1);
+				
+				if (document.getElementById("result").innerHTML.toUpperCase().includes("DIRECT")) {
+					if (PACTestData.getValue(FPTInt, 4) == 'DIRECT') {
+						PACTestData.setValue(FPTInt, 5, 'PASS');
+					} else {
+						PACTestData.setCell(FPTInt, 5, 'FAIL', null, {'className': 'bold-red-font'});
+					}
+				} else {
+					if (PACTestData.getValue(FPTInt, 4) == 'PROXY') {
+						PACTestData.setValue(FPTInt, 5, 'PASS');
+					} else {
+						PACTestData.setCell(FPTInt, 5, 'FAIL', null, {'className': 'bold-red-font'});
+					}
+				}
+
+				FPTInt++;
+			}
+			let PACTestView = new google.visualization.DataView(PACTestData);
+			PACTestView.hideColumns([3]);
+
+			let PACAutoTestTable2 = new google.visualization.Table(document.getElementById('PACAutoTestTable_div'));
+			PACAutoTestTable2.draw(PACTestView, PACAutoTestTableOptions);
+			//alert('Testing complete');
+			document.getElementById("result").innerHTML = 'PAC testing complete';
+		}
+		
+
+		
+		function SplitTest () {
+			
+			document.getElementById("main").style.cursor = "wait";
+
+		}
+
+	</script>
+	
+	<div id="pac_file" style="display: none;"></div>
+
+	<!-- <div>
+		<textarea id="c2codetxt" name="c2codetxt" rows="50" cols="300" hidden></textarea>
+	</div> -->
+	
+	
+	<!-- <div id="testtable_div"></div> -->
+	
+	</body>
+</html>
